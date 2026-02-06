@@ -586,12 +586,7 @@
                     clickCount = 0;
                 }, 2000);
                 
-                // Show feedback
-                if (clickCount < 5) {
-                    elements.modeIndicator.textContent = `🔓 ${clickCount}/5 click`;
-                }
-                
-                // Activate edit mode after 5 clicks
+                // Activate edit mode after 5 clicks (no visual feedback for security)
                 if (clickCount >= 5) {
                     setEditMode(true);
                     clickCount = 0;
