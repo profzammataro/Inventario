@@ -275,55 +275,6 @@
             color: #721c24;
         }
 
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .modal.active {
-            display: flex;
-        }
-
-        .modal-content {
-            background: white;
-            padding: 30px;
-            border-radius: 12px;
-            max-width: 400px;
-            text-align: center;
-        }
-
-        .modal-content h3 {
-            margin-bottom: 20px;
-            color: #495057;
-        }
-
-        .modal-content input {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #dee2e6;
-            border-radius: 8px;
-            font-size: 1em;
-            margin-bottom: 20px;
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: #6c757d;
-        }
-
-        .empty-state h3 {
-            margin-bottom: 10px;
-        }
-
         .mode-indicator {
             display: inline-block;
             padding: 6px 12px;
@@ -331,6 +282,13 @@
             font-size: 0.9em;
             font-weight: 600;
             margin-left: 15px;
+            cursor: pointer;
+            user-select: none;
+            transition: transform 0.1s;
+        }
+
+        .mode-indicator:active {
+            transform: scale(0.95);
         }
 
         .mode-readonly {
@@ -341,6 +299,16 @@
         .mode-edit {
             background: #28a745;
             color: white;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+
+        .empty-state h3 {
+            margin-bottom: 10px;
         }
     </style>
 </head>
@@ -356,8 +324,7 @@
                 <input type="text" id="searchInput" placeholder="🔍 Cerca per nome, categoria o posizione...">
             </div>
             <div>
-                <button class="btn btn-primary" id="toggleModeBtn">🔓 Abilita Modifica</button>
-                <span class="mode-indicator mode-readonly" id="modeIndicator">📖 Modalità Lettura</span>
+                <span class="mode-indicator mode-readonly" id="modeIndicator" title="Clicca 5 volte per attivare la modalità modifica">📖 Modalità Lettura</span>
             </div>
             <button class="btn btn-primary" id="addBtn" style="display:none;">➕ Aggiungi Articolo</button>
         </div>
@@ -453,17 +420,6 @@
         </div>
     </div>
 
-    <div class="modal" id="passwordModal">
-        <div class="modal-content">
-            <h3>🔒 Inserisci Password</h3>
-            <input type="password" id="passwordInput" placeholder="Password">
-            <div class="form-actions" style="justify-content: center;">
-                <button class="btn btn-secondary" id="cancelPasswordBtn">Annulla</button>
-                <button class="btn btn-primary" id="confirmPasswordBtn">Conferma</button>
-            </div>
-        </div>
-    </div>
-
     <script type="module">
         import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
         import { getDatabase, ref, push, set, onValue, remove, update } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js';
@@ -486,6 +442,8 @@
         let currentEditId = null;
         let allItems = [];
         let currentSort = { column: null, direction: 'asc' };
+        let clickCount = 0;
+        let clickTimeout = null;
 
         const elements = {
             addBtn: document.getElementById('addBtn'),
@@ -494,12 +452,7 @@
             cancelBtn: document.getElementById('cancelBtn'),
             itemsBody: document.getElementById('itemsBody'),
             searchInput: document.getElementById('searchInput'),
-            toggleModeBtn: document.getElementById('toggleModeBtn'),
             modeIndicator: document.getElementById('modeIndicator'),
-            passwordModal: document.getElementById('passwordModal'),
-            passwordInput: document.getElementById('passwordInput'),
-            confirmPasswordBtn: document.getElementById('confirmPasswordBtn'),
-            cancelPasswordBtn: document.getElementById('cancelPasswordBtn'),
             formTitle: document.getElementById('formTitle')
         };
 
@@ -616,33 +569,34 @@
             });
         });
 
-        elements.toggleModeBtn.addEventListener('click', () => {
-            if (!editMode) {
-                elements.passwordModal.classList.add('active');
-                elements.passwordInput.value = '';
-                elements.passwordInput.focus();
-            } else {
+        // Click counter on mode indicator
+        elements.modeIndicator.addEventListener('click', () => {
+            if (editMode) {
+                // If already in edit mode, toggle it off
                 setEditMode(false);
-            }
-        });
-
-        elements.confirmPasswordBtn.addEventListener('click', () => {
-            if (elements.passwordInput.value === 'HopeArchivio2025') {
-                setEditMode(true);
-                elements.passwordModal.classList.remove('active');
+                clickCount = 0;
+                clearTimeout(clickTimeout);
             } else {
-                alert('❌ Password errata!');
-                elements.passwordInput.value = '';
-            }
-        });
-
-        elements.cancelPasswordBtn.addEventListener('click', () => {
-            elements.passwordModal.classList.remove('active');
-        });
-
-        elements.passwordInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                elements.confirmPasswordBtn.click();
+                // Count clicks to activate edit mode
+                clickCount++;
+                
+                // Reset counter after 2 seconds of inactivity
+                clearTimeout(clickTimeout);
+                clickTimeout = setTimeout(() => {
+                    clickCount = 0;
+                }, 2000);
+                
+                // Show feedback
+                if (clickCount < 5) {
+                    elements.modeIndicator.textContent = `🔓 ${clickCount}/5 click`;
+                }
+                
+                // Activate edit mode after 5 clicks
+                if (clickCount >= 5) {
+                    setEditMode(true);
+                    clickCount = 0;
+                    clearTimeout(clickTimeout);
+                }
             }
         });
 
@@ -655,13 +609,13 @@
             document.querySelector('.actions-header').style.display = enabled ? 'table-cell' : 'none';
             
             if (enabled) {
-                elements.toggleModeBtn.textContent = '🔒 Disabilita Modifica';
                 elements.modeIndicator.textContent = '✏️ Modalità Modifica';
                 elements.modeIndicator.className = 'mode-indicator mode-edit';
+                elements.modeIndicator.title = 'Clicca per disattivare la modalità modifica';
             } else {
-                elements.toggleModeBtn.textContent = '🔓 Abilita Modifica';
                 elements.modeIndicator.textContent = '📖 Modalità Lettura';
                 elements.modeIndicator.className = 'mode-indicator mode-readonly';
+                elements.modeIndicator.title = 'Clicca 5 volte per attivare la modalità modifica';
                 elements.formContainer.classList.remove('active');
             }
         }
